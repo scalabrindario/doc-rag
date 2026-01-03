@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Processing RAG System</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect } = React;
+
+        // Lucide icons as React components
+        const MessageCircle = ({ className = "w-5 h-5" }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+        );
+
+        const Upload = ({ className = "w-5 h-5" }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+        );
+
+        const FileText = ({ className = "w-5 h-5" }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+        );
+
+        const Send = ({ className = "w-5 h-5" }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+        );
+
+        const Loader2 = ({ className = "w-5 h-5" }) => (
+            <svg className={className + " animate-spin"} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+        );
+
+        const Database = ({ className = "w-5 h-5" }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+            </svg>
+        );
+
+        const X = ({ className = "w-5 h-5" }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        );
+
+        const Check = ({ className = "w-5 h-5" }) => (
+            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+        );
+
+        const DocumentProcessingRAG = () => {
+          const [activeTab, setActiveTab] = useState('query');
+          const [messages, setMessages] = useState([]);
+          const [inputValue, setInputValue] = useState('');
+          const [isLoading, setIsLoading] = useState(false);
+          const [documents, setDocuments] = useState([]);
+          const [uploadFiles, setUploadFiles] = useState([]);
+          const [uploadStatus, setUploadStatus] = useState('idle');
+          const messagesEndRef = useRef(null);
+          const fileInputRef = useRef(null);
+
+          const scrollToBottom = () => {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+          };
+
+          useEffect(() => {
+            scrollToBottom();
+          }, [messages]);
+
+          useEffect(() => {
+            loadDocuments();
+          }, []);
+
+          const loadDocuments = async () => {
+            try {
+              const response = await fetch('http://localhost:8000/api/documents');
+              if (response.ok) {
+                const data = await response.json();
+                setDocuments(data);
+              }
+            } catch (error) {
+              console.error('Error loading documents:', error);
+            }
+          };
+
+          const handleQuery = async (e) => {
+            e.preventDefault();
+            if (!inputValue.trim() || isLoading) return;
+
+            const userMessage = { role: 'user', content: inputValue };
+            setMessages(prev => [...prev, userMessage]);
+            setInputValue('');
+            setIsLoading(true);
+
+            try {
+              const response = await fetch('http://localhost:8000/api/query', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  query: userMessage.content,
+                  similarity_top_k: 10,
+                  reranker_top_n: 3,
+                  max_sources: 3
+                })
+              });
+
+              if (!response.ok) {
+                throw new Error('Query failed');
+              }
+
+              const data = await response.json();
+
+              const assistantMessage = {
+                role: 'assistant',
+                content: data.response,
+                sources: data.sources
+              };
+
+              setMessages(prev => [...prev, assistantMessage]);
+            } catch (error) {
+              const errorMessage = {
+                role: 'assistant',
+                content: 'Sorry, there was an error processing your query. Please try again.',
+                isError: true
+              };
+              setMessages(prev => [...prev, errorMessage]);
+            } finally {
+              setIsLoading(false);
+            }
+          };
+
+          const handleFileSelect = (e) => {
+            const files = Array.from(e.target.files);
+            const fileData = files.map(file => ({
+              file,
+              name: file.name,
+              company: '',
+              documentName: '',
+              status: 'pending'
+            }));
+            setUploadFiles(fileData);
+            setUploadStatus('configuring');
+          };
+
+          const updateFileData = (index, field, value) => {
+            setUploadFiles(prev => {
+              const updated = [...prev];
+              updated[index][field] = value;
+              return updated;
+            });
+          };
+
+          const handleUpload = async () => {
+            setUploadStatus('uploading');
+
+            try {
+              const formData = new FormData();
+
+              uploadFiles.forEach(fileData => {
+                formData.append('files', fileData.file);
+              });
+
+              const companyNames = uploadFiles.map(f => f.company).join(',');
+              const documentNames = uploadFiles.map(f => f.documentName).join(',');
+
+              formData.append('company_names', companyNames);
+              formData.append('document_names', documentNames);
+
+              const response = await fetch('http://localhost:8000/api/upload', {
+                method: 'POST',
+                body: formData
+              });
+
+              if (!response.ok) {
+                throw new Error('Upload failed');
+              }
+
+              const result = await response.json();
+
+              setUploadFiles(prev => prev.map(f => ({ ...f, status: 'success' })));
+              setUploadStatus('complete');
+
+              await loadDocuments();
+
+              setTimeout(() => {
+                setUploadFiles([]);
+                setUploadStatus('idle');
+              }, 2000);
+
+            } catch (error) {
+              console.error('Upload error:', error);
+              setUploadFiles(prev => prev.map(f => ({ ...f, status: 'failed' })));
+              setTimeout(() => {
+                setUploadStatus('idle');
+              }, 2000);
+            }
+          };
+
+          const removeFile = (index) => {
+            setUploadFiles(prev => prev.filter((_, i) => i !== index));
+            if (uploadFiles.length === 1) {
+              setUploadStatus('idle');
+            }
+          };
+
+          const canUpload = uploadFiles.every(f => f.company && f.documentName);
+
+          return (
+            <div className="flex h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+              <div className="w-64 bg-white border-r border-slate-200 flex flex-col">
+                <div className="p-6 border-b border-slate-200">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <Database className="w-6 h-6 text-blue-600" />
+                    <h1 className="text-xl font-bold text-slate-800">Doc RAG</h1>
+                  </div>
+                  <p className="text-xs text-slate-500">Document Processing System</p>
+                </div>
+
+                <nav className="flex-1 p-4">
+                  <button
+                    onClick={() => setActiveTab('query')}
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg mb-2 transition-all ${
+                      activeTab === 'query'
+                        ? 'bg-blue-50 text-blue-700 shadow-sm'
+                        : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <MessageCircle className="w-5 h-5" />
+                    <span className="font-medium">Query Documents</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab('upload')}
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg mb-2 transition-all ${
+                      activeTab === 'upload'
+                        ? 'bg-blue-50 text-blue-700 shadow-sm'
+                        : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Upload className="w-5 h-5" />
+                    <span className="font-medium">Upload Documents</span>
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab('documents')}
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-all ${
+                      activeTab === 'documents'
+                        ? 'bg-blue-50 text-blue-700 shadow-sm'
+                        : 'text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <FileText className="w-5 h-5" />
+                    <span className="font-medium">View Documents</span>
+                  </button>
+                </nav>
+
+                <div className="p-4 border-t border-slate-200">
+                  <div className="bg-slate-50 rounded-lg p-3">
+                    <div className="text-xs font-medium text-slate-600 mb-1">Database Status</div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      <span className="text-xs text-slate-700">{documents.length} documents loaded</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex-1 flex flex-col">
+                {activeTab === 'query' && (
+                  <>
+                    <div className="bg-white border-b border-slate-200 px-6 py-4">
+                      <h2 className="text-2xl font-bold text-slate-800">Query Documents</h2>
+                      <p className="text-sm text-slate-500 mt-1">Ask questions about your documents</p>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-6">
+                      {messages.length === 0 ? (
+                        <div className="h-full flex items-center justify-center">
+                          <div className="text-center max-w-md">
+                            <MessageCircle className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                            <h3 className="text-xl font-semibold text-slate-700 mb-2">Start a conversation</h3>
+                            <p className="text-slate-500 mb-6">Ask questions about the documents in your database</p>
+                            <div className="bg-blue-50 rounded-lg p-4 text-left">
+                              <p className="text-sm font-medium text-blue-900 mb-2">Example queries:</p>
+                              <ul className="text-sm text-blue-700 space-y-1">
+                                <li>• What are the main topics covered in the documents?</li>
+                                <li>• Summarize the key findings from document X</li>
+                                <li>• Compare the information across multiple documents</li>
+                              </ul>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="max-w-4xl mx-auto space-y-6">
+                          {messages.map((msg, idx) => (
+                            <div
+                              key={idx}
+                              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                            >
+                              <div
+                                className={`max-w-3xl rounded-2xl px-5 py-3 ${
+                                  msg.role === 'user'
+                                    ? 'bg-blue-600 text-white'
+                                    : msg.isError
+                                    ? 'bg-red-50 text-red-900 border border-red-200'
+                                    : 'bg-white text-slate-800 shadow-sm border border-slate-200'
+                                }`}
+                              >
+                                <div className="whitespace-pre-wrap">{msg.content}</div>
+                                {msg.sources && msg.sources.length > 0 && (
+                                  <div className="mt-3 pt-3 border-t border-slate-200">
+                                    <p className="text-xs font-medium text-slate-500 mb-2">Sources:</p>
+                                    <div className="space-y-1">
+                                      {msg.sources.map((source, i) => (
+                                        <div key={i} className="text-xs text-slate-600 flex items-center">
+                                          <FileText className="w-3 h-3 mr-1" />
+                                          {source}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                          {isLoading && (
+                            <div className="flex justify-start">
+                              <div className="bg-white rounded-2xl px-5 py-3 shadow-sm border border-slate-200">
+                                <Loader2 className="w-5 h-5 text-blue-600" />
+                              </div>
+                            </div>
+                          )}
+                          <div ref={messagesEndRef} />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="bg-white border-t border-slate-200 p-6">
+                      <div className="max-w-4xl mx-auto">
+                        <div className="flex space-x-3">
+                          <input
+                            type="text"
+                            value={inputValue}
+                            onChange={(e) => setInputValue(e.target.value)}
+                            onKeyPress={(e) => e.key === 'Enter' && handleQuery(e)}
+                            placeholder="Ask a question about your documents..."
+                            className="flex-1 px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            disabled={isLoading}
+                          />
+                          <button
+                            onClick={handleQuery}
+                            disabled={!inputValue.trim() || isLoading}
+                            className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
+                          >
+                            <Send className="w-5 h-5" />
+                            <span className="font-medium">Send</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {activeTab === 'upload' && (
+                  <>
+                    <div className="bg-white border-b border-slate-200 px-6 py-4">
+                      <h2 className="text-2xl font-bold text-slate-800">Upload Documents</h2>
+                      <p className="text-sm text-slate-500 mt-1">Add new documents to the vector database</p>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-6">
+                      <div className="max-w-4xl mx-auto">
+                        {uploadStatus === 'idle' && (
+                          <div
+                            onClick={() => fileInputRef.current?.click()}
+                            className="border-2 border-dashed border-slate-300 rounded-xl p-12 text-center hover:border-blue-400 hover:bg-blue-50 transition-colors cursor-pointer"
+                          >
+                            <Upload className="w-16 h-16 text-slate-400 mx-auto mb-4" />
+                            <h3 className="text-lg font-semibold text-slate-700 mb-2">Upload PDF Documents</h3>
+                            <p className="text-slate-500 mb-4">Click to browse or drag and drop files here</p>
+                            <p className="text-xs text-slate-400">Supports: PDF files</p>
+                            <input
+                              ref={fileInputRef}
+                              type="file"
+                              accept=".pdf"
+                              multiple
+                              onChange={handleFileSelect}
+                              className="hidden"
+                            />
+                          </div>
+                        )}
+
+                        {(uploadStatus === 'configuring' || uploadStatus === 'uploading' || uploadStatus === 'complete') && (
+                          <div className="space-y-4">
+                            {uploadFiles.map((file, idx) => (
+                              <div key={idx} className="bg-white border border-slate-200 rounded-xl p-6">
+                                <div className="flex items-start justify-between mb-4">
+                                  <div className="flex items-center space-x-3">
+                                    <FileText className="w-8 h-8 text-blue-600" />
+                                    <div>
+                                      <h4 className="font-medium text-slate-800">{file.name}</h4>
+                                      <p className="text-xs text-slate-500">PDF Document</p>
+                                    </div>
+                                  </div>
+                                  {uploadStatus === 'configuring' && (
+                                    <button
+                                      onClick={() => removeFile(idx)}
+                                      className="text-slate-400 hover:text-red-600 transition-colors"
+                                    >
+                                      <X className="w-5 h-5" />
+                                    </button>
+                                  )}
+                                  {file.status === 'success' && (
+                                    <Check className="w-6 h-6 text-green-600" />
+                                  )}
+                                </div>
+
+                                {uploadStatus === 'configuring' && (
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                                        Company
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={file.company}
+                                        onChange={(e) => updateFileData(idx, 'company', e.target.value)}
+                                        placeholder="e.g., Nike"
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                                        Document Name
+                                      </label>
+                                      <input
+                                        type="text"
+                                        value={file.documentName}
+                                        onChange={(e) => updateFileData(idx, 'documentName', e.target.value)}
+                                        placeholder="e.g., Annual report Report 2024"
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+
+                                {uploadStatus === 'uploading' && file.status === 'pending' && (
+                                  <div className="flex items-center space-x-2 text-blue-600">
+                                    <Loader2 className="w-4 h-4" />
+                                    <span className="text-sm">Processing...</span>
+                                  </div>
+                                )}
+
+                                {file.status === 'success' && (
+                                  <div className="flex items-center space-x-2 text-green-600">
+                                    <Check className="w-4 h-4" />
+                                    <span className="text-sm">Successfully uploaded and indexed</span>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+
+                            {uploadStatus === 'configuring' && (
+                              <button
+                                onClick={handleUpload}
+                                disabled={!canUpload}
+                                className="w-full px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                              >
+                                Upload and Process Documents
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {activeTab === 'documents' && (
+                  <>
+                    <div className="bg-white border-b border-slate-200 px-6 py-4">
+                      <h2 className="text-2xl font-bold text-slate-800">Document Library</h2>
+                      <p className="text-sm text-slate-500 mt-1">View all documents in the database</p>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-6">
+                      <div className="max-w-4xl mx-auto">
+                        {documents.length === 0 ? (
+                          <div className="text-center py-12">
+                            <FileText className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-semibold text-slate-700 mb-2">No documents found</h3>
+                            <p className="text-slate-500">Upload documents to get started</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {documents.map((doc, idx) => (
+                              <div
+                                key={idx}
+                                className="bg-white border border-slate-200 rounded-xl p-5 hover:shadow-md transition-shadow"
+                              >
+                                <div className="flex items-center space-x-4">
+                                  <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                                    <FileText className="w-6 h-6 text-blue-600" />
+                                  </div>
+                                  <div className="flex-1">
+                                    <h4 className="font-semibold text-slate-800">{doc.company}</h4>
+                                    <p className="text-sm text-slate-500">{doc.document}</p>
+                                  </div>
+                                  <div className="flex items-center space-x-2 text-green-600">
+                                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                    <span className="text-xs font-medium">Indexed</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        };
+
+        ReactDOM.render(<DocumentProcessingRAG />, document.getElementById('root'));
+    </script>
+</body>
+</html>
