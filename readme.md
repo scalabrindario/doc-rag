@@ -87,8 +87,8 @@ document_processing/
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/yourusername/document-processing-rag.git
-cd document-processing-rag
+git clone https://github.com/scalabrindario/doc-rag.git
+cd doc-rag
 ```
 
 2. **Create and activate virtual environment**
